@@ -1,5 +1,5 @@
 name: app-build-action
-# 👑 唯一指定：只允许手动点击按钮编译，彻底关闭所有自动触发
+# 唯一指定：只允许手动点击按钮编译
 on:
   workflow_dispatch:
 
@@ -14,20 +14,27 @@ jobs:
         with:
           ref: master
 
-      # 2. 核心神操作：伪造空的密钥配置文件，完美骗过 build.gradle.kts 的 null 强转检查
-      - name: Create fake key.properties
-        run: |
-          echo "storeFile=fake_keystore.jks" > simple_live_tv_app/android/key.properties
-          echo "storePassword=fake_password" >> simple_live_tv_app/android/key.properties
-          echo "keyPassword=fake_password" >> simple_live_tv_app/android/key.properties
-          echo "keyAlias=fake_alias" >> simple_live_tv_app/android/key.properties
-
-      # 3. 设置 JAVA 环境
+      # 2. 设置 JAVA 环境（提前这一步，因为生成证书需要用到 keytool 命令）
       - uses: actions/setup-java@v4
         with:
           distribution: "zulu"
           java-version: "17"
           cache: "gradle"
+
+      # 3. 核心神操作：不仅伪造配置，还在现场直接生成一个货真价实的密钥证书文件！
+      - name: Create real fake keystore and properties
+        run: |
+          # 现场使用 JDK 自带的 keytool 工具，直接强行生成一个物理 keystore.jks 文件
+          keytool -genkey -v -keystore simple_live_tv_app/android/app/fake_keystore.jks \
+            -alias fake_alias -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass fake_password -keypass fake_password \
+            -dname "CN=SimpleLive, OU=TV, O=Dev, L=GZ, S=GD, C=CN"
+          
+          # 把这个真实存在的证书路径和密码，写进配置文件
+          echo "storeFile=fake_keystore.jks" > simple_live_tv_app/android/key.properties
+          echo "storePassword=fake_password" >> simple_live_tv_app/android/key.properties
+          echo "keyPassword=fake_password" >> simple_live_tv_app/android/key.properties
+          echo "keyAlias=fake_alias" >> simple_live_tv_app/android/key.properties
 
       # 4. 设置 Flutter 环境
       - name: Flutter action
@@ -42,13 +49,13 @@ jobs:
           cd simple_live_tv_app
           flutter pub get
 
-      # 6. 打包 APK：强行 Release 编译并分离架构，让体积暴减，且自动降级使用本地通用签名
+      # 6. 打包 APK：强行 Release 编译，这回有了真的证书，Gradle 绝对无话可说
       - name: Build APK
         run: |
           cd simple_live_tv_app
           flutter build apk --release --split-per-abi
 
-      # 7. 上传至 Artifacts：只提取最适合索尼电视 CPU 架构的 arm64-v8a 纯净正式版（体积只有30MB左右）
+      # 7. 上传至 Artifacts：只提取 30MB 左右最适合电视的 arm64-v8a 纯净正式版
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
