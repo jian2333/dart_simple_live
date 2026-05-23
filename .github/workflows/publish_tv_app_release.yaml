@@ -1,19 +1,20 @@
 name: app-build-action
-# 手动触发
+# 👑 唯一指定：只允许手动点击按钮编译，彻底关闭所有自动触发
 on:
   workflow_dispatch:
+
 jobs:
   build-tv:
     runs-on: macos-latest
     permissions:
       contents: write
     steps:
-      #签出代码
+      # 1. 签出代码
       - uses: actions/checkout@v4
         with:
           ref: master
 
-      # 伪造空的密钥配置文件，绕过 build.gradle.kts 的非空强转检查
+      # 2. 核心神操作：伪造空的密钥配置文件，完美骗过 build.gradle.kts 的 null 强转检查
       - name: Create fake key.properties
         run: |
           echo "storeFile=fake_keystore.jks" > simple_live_tv_app/android/key.properties
@@ -21,38 +22,38 @@ jobs:
           echo "keyPassword=fake_password" >> simple_live_tv_app/android/key.properties
           echo "keyAlias=fake_alias" >> simple_live_tv_app/android/key.properties
 
-      # 设置JAVA环境
+      # 3. 设置 JAVA 环境
       - uses: actions/setup-java@v4
         with:
           distribution: "zulu"
           java-version: "17"
           cache: "gradle"
 
-      #设置Flutter
+      # 4. 设置 Flutter 环境
       - name: Flutter action
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.38.x"
           cache: true
 
-      #更新Flutter的packages
+      # 5. 更新 Flutter 的 packages
       - name: Restore packages
         run: |
           cd simple_live_tv_app
           flutter pub get
 
-      #打包APK（Debug模式，使用本地通用调试签名）
+      # 6. 打包 APK：强行 Release 编译并分离架构，让体积暴减，且自动降级使用本地通用签名
       - name: Build APK
         run: |
           cd simple_live_tv_app
-          flutter build apk --debug
+          flutter build apk --release --split-per-abi
 
-      #上传APK至Artifacts
+      # 7. 上传至 Artifacts：只提取最适合索尼电视 CPU 架构的 arm64-v8a 纯净正式版（体积只有30MB左右）
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android_tv_debug
-          path: simple_live_tv_app/build/app/outputs/flutter-apk/app-debug.apk
+          name: android_tv_release_arm64
+          path: simple_live_tv_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
-      #完成
+      # 8. 编译完成打卡
       - run: echo "🍏 This job's status is ${{ job.status }}."
