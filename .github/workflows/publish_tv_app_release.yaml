@@ -13,6 +13,14 @@ jobs:
         with:
           ref: master
 
+      # 伪造空的密钥配置文件，绕过 build.gradle.kts 的非空强转检查
+      - name: Create fake key.properties
+        run: |
+          echo "storeFile=fake_keystore.jks" > simple_live_tv_app/android/key.properties
+          echo "storePassword=fake_password" >> simple_live_tv_app/android/key.properties
+          echo "keyPassword=fake_password" >> simple_live_tv_app/android/key.properties
+          echo "keyAlias=fake_alias" >> simple_live_tv_app/android/key.properties
+
       # 设置JAVA环境
       - uses: actions/setup-java@v4
         with:
@@ -33,7 +41,7 @@ jobs:
           cd simple_live_tv_app
           flutter pub get
 
-      #打包APK（修改为Debug模式，绕过签名）
+      #打包APK（Debug模式，使用本地通用调试签名）
       - name: Build APK
         run: |
           cd simple_live_tv_app
